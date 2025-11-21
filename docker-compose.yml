@@ -1,18 +1,23 @@
 services:
-# Base services (DB, cache)
+# Services principaux :
+# - MySQL pour les données persistantes
+# - Redis pour le cache, les queues et le broadcasting
+# - App pour exécuter Laravel
+# - Nginx comme reverse-proxy HTTP
+# - Reverb pour le WebSocket en temps réel
   mysql:
     image: mysql:8.0
     container_name: laravel-chat-mysql
     restart: unless-stopped
-    environment:
+    environment: # variables de création d'utilisateur + base
       MYSQL_DATABASE: laravel_chat
       MYSQL_ROOT_PASSWORD: root
       MYSQL_PASSWORD: password
       MYSQL_USER: laravel
     ports:
-      - "3307:3306"
+      - "3307:3306"    # expose MySQL sur 3307 (hôte) → 3306 (conteneur)
     volumes:
-      - mysql_data:/var/lib/mysql
+      - mysql_data:/var/lib/mysql  # données persistantes de MySQL
     networks:
       - laravel-chat-network
 
@@ -21,13 +26,14 @@ services:
     container_name: laravel-chat-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "6379:6379"    # Redis accessible sur le port 6379
     volumes:
-      - redis_data:/data
+      - redis_data:/data  # données persistantes de Redis (cache + files)
     networks:
       - laravel-chat-network
 
   app:
+# Conteneur applicatif : Laravel + Livewire, responsable du code et de la diffusion
     build:
       context: ./laravel-chat
       dockerfile: Dockerfile
@@ -35,7 +41,7 @@ services:
     restart: unless-stopped
     working_dir: /var/www/html
     volumes:
-      - ./laravel-chat:/var/www/html
+      - ./laravel-chat:/var/www/html  # synchronise le code pour rechargements immédiats
     networks:
       - laravel-chat-network
     depends_on:
@@ -43,11 +49,12 @@ services:
       - redis
 
   nginx:
+# Reverse-proxy : délivre les requêtes web et sert les assets compilés
     image: nginx:alpine
     container_name: laravel-chat-nginx
     restart: unless-stopped
     ports:
-      - "8000:80"
+      - "8000:80"      # Nginx expose le site Laravel sur http://localhost:8000
     volumes:
       - ./laravel-chat:/var/www/html
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
@@ -57,6 +64,7 @@ services:
       - app
 
   reverb:
+# Composant temps réel : Reverb reçoit les événements broadcastés et les pousse aux clients Echo
     build:
       context: ./laravel-chat
       dockerfile: Dockerfile.reverb
@@ -64,9 +72,9 @@ services:
     restart: unless-stopped
     working_dir: /var/www/html
     volumes:
-      - ./laravel-chat:/var/www/html
+      - ./laravel-chat:/var/www/html  # partage des mêmes ressources Laravel
     ports:
-      - "8080:8080"
+      - "8080:8080"    # Serveur WebSocket Reverb pour diffuser les événements temps réel
     networks:
       - laravel-chat-network
     depends_on:
@@ -74,12 +82,12 @@ services:
       - redis
 
 networks:
-# Shared bridge network for all containers
+# Réseau bridge partagé entre tous les services
   laravel-chat-network:
     driver: bridge
 
 volumes:
-# Persistent volumes for database/cache data
-  mysql_data:
-  redis_data:
+# Volumes persistants pour stocker les données d'état
+  mysql_data:    # fichiers binaires et tables MySQL
+  redis_data:    # données cache/queues de Redis
 
