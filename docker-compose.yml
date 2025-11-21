@@ -1,0 +1,85 @@
+services:
+# Base services (DB, cache)
+  mysql:
+    image: mysql:8.0
+    container_name: laravel-chat-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: laravel_chat
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_PASSWORD: password
+      MYSQL_USER: laravel
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - laravel-chat-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: laravel-chat-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - laravel-chat-network
+
+  app:
+    build:
+      context: ./laravel-chat
+      dockerfile: Dockerfile
+    container_name: laravel-chat-app
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./laravel-chat:/var/www/html
+    networks:
+      - laravel-chat-network
+    depends_on:
+      - mysql
+      - redis
+
+  nginx:
+    image: nginx:alpine
+    container_name: laravel-chat-nginx
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./laravel-chat:/var/www/html
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - laravel-chat-network
+    depends_on:
+      - app
+
+  reverb:
+    build:
+      context: ./laravel-chat
+      dockerfile: Dockerfile.reverb
+    container_name: laravel-chat-reverb
+    restart: unless-stopped
+    working_dir: /var/www/html
+    volumes:
+      - ./laravel-chat:/var/www/html
+    ports:
+      - "8080:8080"
+    networks:
+      - laravel-chat-network
+    depends_on:
+      - app
+      - redis
+
+networks:
+# Shared bridge network for all containers
+  laravel-chat-network:
+    driver: bridge
+
+volumes:
+# Persistent volumes for database/cache data
+  mysql_data:
+  redis_data:
+
